@@ -47,6 +47,14 @@ class Database
                     PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
                 ];
 
+                // Tùy chọn: nếu đặt DB_SSL_CA (đường dẫn tới file chứng chỉ CA, ví dụ ca.pem của Aiven)
+                // thì bật kiểm tra chứng chỉ máy chủ. Không đặt -> giữ hành vi cũ (không kiểm tra).
+                $sslCa = (string)Env::get('DB_SSL_CA', '');
+                if ($sslCa !== '' && is_file($sslCa)) {
+                    $options[PDO::MYSQL_ATTR_SSL_CA] = $sslCa;
+                    $options[PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT] = true;
+                }
+
                 self::$connection = new PDO(
                     $dsn,
                     self::$username,

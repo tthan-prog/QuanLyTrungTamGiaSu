@@ -26,7 +26,10 @@ class JWT
         ];
 
         $payload['iat'] = time();
-        $payload['exp'] = time() + self::$expireTime;
+        // Giữ nguyên 'exp' nếu nơi gọi tự đặt (ví dụ token OTP 5 phút); mặc định theo cấu hình.
+        if (!isset($payload['exp'])) {
+            $payload['exp'] = time() + self::$expireTime;
+        }
 
         $base64Header = self::base64UrlEncode(json_encode($header));
         $base64Payload = self::base64UrlEncode(json_encode($payload));
@@ -62,17 +65,32 @@ class JWT
         );
         $validSignature = self::base64UrlEncode($signature);
 
-        if ($base64Signature !== $validSignature) {
+        // So sánh thời gian hằng số, tránh tấn công đo thời gian
+        if (!hash_equals($validSignature, $base64Signature)) {
             return false;
         }
 
         $payload = json_decode(self::base64UrlDecode($base64Payload), true);
+
+        if (!is_array($payload)) {
+            return false;
+        }
 
         if (isset($payload['exp']) && $payload['exp'] < time()) {
             return false;
         }
 
         return $payload;
+    }
+
+    /**
+     * HMAC-SHA256 (hex) của một chuỗi bằng khóa bí mật của ứng dụng.
+     * Dùng để lưu "dấu vân tay" của OTP thay vì lưu OTP gốc.
+     */
+    public static function hmac(string $data): string
+    {
+        self::init();
+        return hash_hmac('sha256', $data, self::$secretKey);
     }
 
     public static function getTokenFromHeader(): ?string

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import DashboardLayout from '../Layouts/DashboardLayout'
 import { LayoutDashboard, Calendar, BookOpen, GraduationCap, Mail, Wallet, UserCircle, Users, ClipboardList } from 'lucide-react'
 import YeuCauManagement from '../components/YeuCauManagement'
@@ -19,13 +19,6 @@ export default function GiaSuDashboard({ user, onLogout }) {
     localStorage.setItem('giasu_active_item', menuId)
   }
 
-  useEffect(() => {
-    // Log token để kiểm tra
-    const token = localStorage.getItem('token')
-    console.log('=== GIA SƯ DASHBOARD ===')
-    console.log('User:', user)
-    console.log('Token:', token)
-  }, [user])
 
   const menuItems = [
     { id: 'dashboard', label: 'Tổng quan', icon: LayoutDashboard },

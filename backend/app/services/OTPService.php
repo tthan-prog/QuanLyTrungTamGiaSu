@@ -11,9 +11,11 @@ class OTPService
     {
         $otp = str_pad(random_int(0, 999999), self::$otpLength, '0', STR_PAD_LEFT);
         
+        // Chỉ lưu HMAC của (email|otp) trong token. Payload JWT đọc được bởi bất kỳ ai
+        // (chỉ base64), nên KHÔNG đặt OTP gốc vào đó.
         $token = JWT::encode([
             'email' => $email,
-            'otp' => $otp,
+            'otp_hash' => JWT::hmac(self::fingerprintInput($email, $otp)),
             'exp' => time() + (self::$expireMinutes * 60)
         ]);
         
@@ -21,6 +23,11 @@ class OTPService
             'otp' => $otp,
             'token' => $token
         ];
+    }
+
+    private static function fingerprintInput(string $email, string $otp): string
+    {
+        return 'otp|' . strtolower(trim($email)) . '|' . $otp;
     }
 
     public static function sendEmail(string $email, string $otp): bool
@@ -36,11 +43,16 @@ class OTPService
             return ['valid' => false, 'message' => 'Token không hợp lệ'];
         }
         
-        if ($decoded['exp'] < time()) {
+        if (($decoded['exp'] ?? 0) < time()) {
             return ['valid' => false, 'message' => 'Mã OTP đã hết hạn'];
         }
-        
-        if ($decoded['otp'] !== $inputOtp) {
+
+        if (empty($decoded['otp_hash']) || empty($decoded['email'])) {
+            return ['valid' => false, 'message' => 'Token không hợp lệ'];
+        }
+
+        $expected = JWT::hmac(self::fingerprintInput($decoded['email'], $inputOtp));
+        if (!hash_equals($decoded['otp_hash'], $expected)) {
             return ['valid' => false, 'message' => 'Mã OTP không đúng'];
         }
         

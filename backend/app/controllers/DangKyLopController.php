@@ -43,6 +43,14 @@ class DangKyLopController {
             return;
         }
 
+        // Chỉ admin được duyệt/từ chối; các vai trò khác chỉ được hủy đơn (da_huy).
+        $role = RoutePolicy::$user['role'] ?? null;
+        if ($role !== 'admin' && $data['trang_thai'] !== 'da_huy') {
+            http_response_code(403);
+            echo json_encode(["status" => "error", "message" => "Bạn không có quyền duyệt hoặc từ chối đơn đăng ký"]);
+            return;
+        }
+
         try {
             // Lấy thông tin đăng ký từ DB để biết phụ huynh
             $dangKy = DangKyLop::getById($id);

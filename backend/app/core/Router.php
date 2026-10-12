@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/../middleware/RoutePolicy.php';
+
 class Router
 {
     private static $routes = [
@@ -44,6 +46,9 @@ class Router
             $params = self::matchRoute($pattern, $uri);
             
             if ($params !== false) {
+                // Kiểm tra đăng nhập / vai trò theo RoutePolicy (401/403 sẽ dừng tại đây)
+                RoutePolicy::enforce($method, $uri);
+
                 try {
                     self::callHandler($handler, $params);
                 } catch (Throwable $e) {

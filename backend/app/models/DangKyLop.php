@@ -69,39 +69,65 @@ class DangKyLop {
         $lop_hoc_id = $dangKy[0]['lop_hoc_id'];
         
         if ($trang_thai_cu === $trang_thai_moi) return true; 
-        
-        if ($trang_thai_cu !== 'da_duyet' && $trang_thai_moi === 'da_duyet') {
-            $sqlCheckCap = "SELECT so_luong_hien_tai, so_luong_toi_da, trang_thai FROM lop_hoc WHERE lop_hoc_id = :lop_hoc_id";
-            $lop = Database::query($sqlCheckCap, [':lop_hoc_id' => $lop_hoc_id]);
 
-            if (($lop[0]['trang_thai'] ?? '') === 'dong') {
-                throw new Exception("Không thể duyệt đơn! Lớp học này đã bị khóa.");
-            }
-            
-            if ($lop[0]['so_luong_hien_tai'] >= $lop[0]['so_luong_toi_da']) {
-                throw new Exception("Không thể duyệt đơn! Lớp học này đã đạt sĩ số tối đa.");
-            }
-        }
+        $tangSiSo = ($trang_thai_cu !== 'da_duyet' && $trang_thai_moi === 'da_duyet');
+        $giamSiSo = ($trang_thai_cu === 'da_duyet' && in_array($trang_thai_moi, ['tu_choi', 'da_huy']));
 
-        $sql = "UPDATE dang_ky_lop SET trang_thai = :trang_thai";
-        if ($trang_thai_moi === 'da_duyet') {
-            $sql .= ", ngay_duyet = CURRENT_TIMESTAMP";
-        }
-        $sql .= " WHERE dang_ky_id = :id";
-        
-        $result = Database::execute($sql, [
-            ':trang_thai' => $trang_thai_moi,
-            ':id' => $id
-        ]);
+        // Giao dịch: kiểm tra sĩ số + tăng sĩ số + đổi trạng thái đơn là MỘT khối,
+        // tránh hai lần duyệt đồng thời cùng vượt sĩ số tối đa.
+        Database::beginTransaction();
+        try {
+            if ($tangSiSo) {
+                $lop = Database::query("SELECT trang_thai FROM lop_hoc WHERE lop_hoc_id = :lop_hoc_id", [':lop_hoc_id' => $lop_hoc_id]);
+                if (!$lop) {
+                    throw new Exception("Không tìm thấy lớp học của đơn đăng ký!");
+                }
+                if (($lop[0]['trang_thai'] ?? '') === 'dong') {
+                    throw new Exception("Không thể duyệt đơn! Lớp học này đã bị khóa.");
+                }
 
-        if ($result) {
-            if ($trang_thai_cu !== 'da_duyet' && $trang_thai_moi === 'da_duyet') {
-                Database::execute("UPDATE lop_hoc SET so_luong_hien_tai = so_luong_hien_tai + 1 WHERE lop_hoc_id = :lop_id", [':lop_id' => $lop_hoc_id]);
-            } elseif ($trang_thai_cu === 'da_duyet' && in_array($trang_thai_moi, ['tu_choi', 'da_huy'])) {
-                Database::execute("UPDATE lop_hoc SET so_luong_hien_tai = so_luong_hien_tai - 1 WHERE lop_hoc_id = :lop_id", [':lop_id' => $lop_hoc_id]);
+                // Tăng sĩ số CÓ ĐIỀU KIỆN trong một câu lệnh duy nhất (nguyên tử).
+                $daTang = Database::execute(
+                    "UPDATE lop_hoc SET so_luong_hien_tai = so_luong_hien_tai + 1
+                     WHERE lop_hoc_id = :lop_id AND so_luong_hien_tai < so_luong_toi_da",
+                    [':lop_id' => $lop_hoc_id]
+                );
+                if ($daTang === 0) {
+                    throw new Exception("Không thể duyệt đơn! Lớp học này đã đạt sĩ số tối đa.");
+                }
             }
+
+            $sql = "UPDATE dang_ky_lop SET trang_thai = :trang_thai";
+            if ($trang_thai_moi === 'da_duyet') {
+                $sql .= ", ngay_duyet = CURRENT_TIMESTAMP";
+            }
+            // Chỉ cập nhật nếu đơn vẫn ở trạng thái cũ (chống xử lý trùng làm lệch sĩ số).
+            $sql .= " WHERE dang_ky_id = :id AND trang_thai = :trang_thai_cu";
+
+            $result = Database::execute($sql, [
+                ':trang_thai' => $trang_thai_moi,
+                ':id' => $id,
+                ':trang_thai_cu' => $trang_thai_cu
+            ]);
+
+            if ($result === 0) {
+                throw new Exception("Đơn đăng ký vừa được xử lý ở thao tác khác, vui lòng tải lại trang.");
+            }
+
+            if ($giamSiSo) {
+                Database::execute(
+                    "UPDATE lop_hoc SET so_luong_hien_tai = so_luong_hien_tai - 1
+                     WHERE lop_hoc_id = :lop_id AND so_luong_hien_tai > 0",
+                    [':lop_id' => $lop_hoc_id]
+                );
+            }
+
+            Database::commit();
+            return true;
+        } catch (Throwable $e) {
+            Database::rollback();
+            throw $e;
         }
-        return $result;
     }
     
     public static function getByLop($lop_hoc_id) {
