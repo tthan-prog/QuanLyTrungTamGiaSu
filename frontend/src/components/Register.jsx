@@ -172,6 +172,8 @@ export default function Register({ onSwitchToLogin, onRegisterSuccess, onClose }
           phone: formData.phone,
           password: formData.password,
           role: formData.role,
+          otp_token: otpToken,
+          otp,
           tutor: {
             birthday: formData.birthday,
             gender: formData.gender,
@@ -191,6 +193,8 @@ export default function Register({ onSwitchToLogin, onRegisterSuccess, onClose }
           phone: formData.phone,
           password: formData.password,
           role: formData.role,
+          otp_token: otpToken,
+          otp,
           student: {
             name: formData.studentName,
             birthday: formData.studentBirthday,

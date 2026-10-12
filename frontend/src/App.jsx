@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Route,
@@ -16,7 +16,7 @@ import AvailableClassPage from "./pages/AvailableClassPage";
 import RegisterforATrialClass from "./pages/RegisterforATrialClass";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AuthModal from "./components/AuthModal";
-import { Toaster } from "sonner";
+import { Toaster, toast } from "sonner";
 import PhuHuynhPage from "./pages/PhuHuynhPage";
 import ScrollToTop from "./components/ScrollToTop";
 
@@ -87,6 +87,24 @@ function AppContent() {
     setShowAuthModal(false);
     navigate("/");
   };
+
+  // Khi bất kỳ API nào trả 401 (token hết hạn): xóa phiên, về trang chủ và mở form đăng nhập.
+  // Dùng ref để luôn gọi bản handler mới nhất mà không phải đăng ký lại sự kiện.
+  const expiredRef = useRef(null);
+  useEffect(() => {
+    expiredRef.current = () => {
+      if (!localStorage.getItem("token")) return; // đã đăng xuất rồi
+      handleLogout();
+      toast.error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại");
+      setAuthTab("login");
+      setShowAuthModal(true);
+    };
+  });
+  useEffect(() => {
+    const onExpired = () => expiredRef.current && expiredRef.current();
+    window.addEventListener("auth:expired", onExpired);
+    return () => window.removeEventListener("auth:expired", onExpired);
+  }, []);
 
   const openLogin = () => {
     setAuthTab("login");

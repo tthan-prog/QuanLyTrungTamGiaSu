@@ -7,6 +7,7 @@ require_once __DIR__ . '/../models/GiaSuMonHoc.php';
 require_once __DIR__ . '/../models/PhuHuynh.php';
 require_once __DIR__ . '/../models/HocSinh.php';
 require_once __DIR__ . '/../models/ThongBaoModel.php';
+require_once __DIR__ . '/../services/OTPService.php';
 
 class AuthController
 {
@@ -230,6 +231,22 @@ class AuthController
             echo json_encode([
                 'status' => 'error',
                 'message' => 'Vui lòng điền đầy đủ thông tin'
+            ], JSON_UNESCAPED_UNICODE);
+            return;
+        }
+
+        // Bắt buộc xác minh OTP email ở máy chủ: không tin việc frontend "đã gọi /otp/verify".
+        $otpToken = trim((string)($input['otp_token'] ?? ''));
+        $otpCode = trim((string)($input['otp'] ?? ''));
+        $otpCheck = ($otpToken !== '' && $otpCode !== '')
+            ? OTPService::verify($otpToken, $otpCode)
+            : ['valid' => false, 'message' => 'Vui lòng xác minh mã OTP gửi qua email'];
+
+        if (!$otpCheck['valid'] || strtolower(trim($otpCheck['email'] ?? '')) !== strtolower($email)) {
+            http_response_code(400);
+            echo json_encode([
+                'status' => 'error',
+                'message' => $otpCheck['valid'] ? 'Mã OTP không khớp với email đăng ký' : $otpCheck['message']
             ], JSON_UNESCAPED_UNICODE);
             return;
         }
